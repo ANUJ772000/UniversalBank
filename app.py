@@ -1,6 +1,7 @@
 """
-Universal Bank Personal Loan Campaign Dashboard
-A complete Streamlit dashboard with Descriptive, Diagnostic, Predictive, and Prescriptive Analytics.
+Universal Bank — Personal Loan Campaign Dashboard
+Executive-friendly data storytelling dashboard.
+Designed for non-technical stakeholders: bank executives, investors, and marketing leads.
 """
 
 import streamlit as st
@@ -8,825 +9,999 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import seaborn as sns
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
-from io import BytesIO
+import warnings
+warnings.filterwarnings("ignore")
 
 from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-from sklearn.metrics import (
-    accuracy_score, confusion_matrix, classification_report,
-    roc_auc_score, roc_curve
-)
-from sklearn.preprocessing import LabelEncoder
-import warnings
-warnings.filterwarnings("ignore")
+from sklearn.metrics import accuracy_score, confusion_matrix, roc_auc_score, roc_curve
 
-# ─────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════
 # PAGE CONFIG
-# ─────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════
 st.set_page_config(
-    page_title="Universal Bank — Loan Campaign Dashboard",
+    page_title="Universal Bank — Loan Campaign Intelligence",
     page_icon="🏦",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# ─────────────────────────────────────────────
-# CUSTOM CSS
-# ─────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════
+# GLOBAL STYLES
+# Color convention:
+#   Green  (#1e8c6e) → customers LIKELY to accept loans
+#   Red    (#d64045) → customers UNLIKELY to accept loans
+#   Blue   (#2d6a9f) → neutral / informational metrics
+# ══════════════════════════════════════════════════════════════
 st.markdown("""
 <style>
-    .main { background-color: #f8fafc; }
-    .stMetric { background: #ffffff; border-radius: 12px; padding: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.07); }
-    h1, h2, h3 { color: #1e3a5f; }
-    .section-header {
-        background: linear-gradient(90deg, #1e3a5f, #2d6a9f);
-        color: white; padding: 10px 20px; border-radius: 8px;
-        font-size: 1.2rem; font-weight: 700; margin-bottom: 20px;
-    }
-    .insight-box {
-        background: #e8f4fd; border-left: 4px solid #2d6a9f;
-        padding: 12px 16px; border-radius: 6px; margin: 8px 0;
-        color: #1e3a5f;
-    }
-    .persona-card {
-        background: white; border-radius: 12px;
-        padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        border-top: 4px solid;
-    }
+html, body, [class*="css"] { font-family: 'Segoe UI', sans-serif; }
+.main { background-color: #f4f7fb; }
+section[data-testid="stSidebar"] { background: #1e3a5f; }
+section[data-testid="stSidebar"] * { color: #ffffff !important; }
+
+.stTabs [data-baseweb="tab-list"] {
+    gap: 6px; background: #e8eef5; padding: 6px; border-radius: 10px;
+}
+.stTabs [data-baseweb="tab"] {
+    border-radius: 8px; padding: 8px 18px;
+    font-weight: 600; color: #1e3a5f; background: transparent;
+}
+.stTabs [aria-selected="true"] {
+    background: #2d6a9f !important; color: white !important;
+}
+
+div[data-testid="metric-container"] {
+    background: #ffffff; border-radius: 14px;
+    padding: 16px 20px; box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+    border-left: 5px solid #2d6a9f;
+}
+
+.banner {
+    background: linear-gradient(135deg, #1e3a5f 0%, #2d6a9f 100%);
+    color: white; padding: 14px 22px; border-radius: 10px;
+    font-size: 1.15rem; font-weight: 700; margin-bottom: 22px;
+}
+
+.insight-green {
+    background: #eafaf4; border-left: 5px solid #1e8c6e;
+    padding: 14px 18px; border-radius: 8px; margin: 10px 0;
+    color: #0d4a30; font-size: 0.95rem;
+}
+.insight-blue {
+    background: #e8f2fd; border-left: 5px solid #2d6a9f;
+    padding: 14px 18px; border-radius: 8px; margin: 10px 0;
+    color: #0d2a4a; font-size: 0.95rem;
+}
+.insight-orange {
+    background: #fff8ec; border-left: 5px solid #f4a940;
+    padding: 14px 18px; border-radius: 8px; margin: 10px 0;
+    color: #5a3a00; font-size: 0.95rem;
+}
+
+.persona {
+    background: white; border-radius: 14px; padding: 22px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+    border-top: 5px solid; margin-bottom: 12px;
+}
+.persona h4 { margin: 0 0 10px 0; font-size: 1.05rem; }
+.big-rate { font-size: 2rem; font-weight: 800; }
+
+.chart-note {
+    font-size: 0.85rem; color: #555; background: #f9f9f9;
+    padding: 8px 14px; border-radius: 6px;
+    margin-top: -6px; margin-bottom: 14px; border: 1px solid #e5e5e5;
+}
+
+.rec-table { width:100%; border-collapse: collapse; font-size:0.9rem; }
+.rec-table th { background:#1e3a5f; color:white; padding:10px; text-align:left; }
+.rec-table td { padding:10px; border-bottom:1px solid #e5e5e5; vertical-align:top; }
+.rec-table tr:nth-child(even) td { background:#f4f7fb; }
+.pill-high   { background:#fde8e8; color:#c0392b; border-radius:20px; padding:3px 10px; font-weight:600; font-size:0.8rem; }
+.pill-medium { background:#fff3cd; color:#856404; border-radius:20px; padding:3px 10px; font-weight:600; font-size:0.8rem; }
+.pill-low    { background:#d4edda; color:#155724; border-radius:20px; padding:3px 10px; font-weight:600; font-size:0.8rem; }
 </style>
 """, unsafe_allow_html=True)
 
-# ─────────────────────────────────────────────
-# DATA LOADING & PREPROCESSING
-# ─────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════
+# DATA LOADING
+# ══════════════════════════════════════════════════════════════
 @st.cache_data
 def load_data():
-    """Load and preprocess the Universal Bank dataset."""
-    # Load dataset — file must be in the same directory as app.py
     try:
         df = pd.read_excel("UniversalBank.xlsx", sheet_name="UniversalBank")
     except Exception:
         df = pd.read_excel("UniversalBank.xlsx")
 
-    # Rename columns for convenience
     df.columns = df.columns.str.strip()
-    rename_map = {
+    df.rename(columns={
         "Personal Loan": "PersonalLoan",
         "ZIP Code": "ZIPCode",
         "Securities Account": "SecuritiesAccount",
         "CD Account": "CDAccount",
-        "CreditCard": "CreditCard",
-    }
-    df.rename(columns=rename_map, inplace=True)
-
-    # Drop ID (not useful for modeling)
+    }, inplace=True)
     df.drop(columns=["ID"], errors="ignore", inplace=True)
-
-    # Education mapping for readability
     df["Education_Label"] = df["Education"].map({1: "Undergrad", 2: "Graduate", 3: "Advanced/Prof"})
-
+    df["Loan_Label"] = df["PersonalLoan"].map({1: "Accepted", 0: "Not Accepted"})
     return df
 
 df = load_data()
 
-# ─────────────────────────────────────────────
-# FEATURE SETS
-# ─────────────────────────────────────────────
 MODEL_FEATURES = [
     "Age", "Experience", "Income", "Family", "CCAvg",
     "Education", "Mortgage", "SecuritiesAccount", "CDAccount", "Online", "CreditCard"
 ]
 TARGET = "PersonalLoan"
-CROSS_SELL_PRODUCTS = ["SecuritiesAccount", "CDAccount", "Online", "CreditCard"]
 
-# ─────────────────────────────────────────────
-# MODEL TRAINING (cached)
-# ─────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════
+# MODEL TRAINING
+# ══════════════════════════════════════════════════════════════
 @st.cache_resource
 def train_models(df):
-    """Train Decision Tree, Random Forest, and Gradient Boosting models."""
     X = df[MODEL_FEATURES]
     y = df[TARGET]
-
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.25, random_state=42, stratify=y
     )
-
     models = {
-        "Decision Tree": DecisionTreeClassifier(max_depth=6, random_state=42),
-        "Random Forest": RandomForestClassifier(n_estimators=150, max_depth=8, random_state=42, n_jobs=-1),
+        "Decision Tree":     DecisionTreeClassifier(max_depth=6, random_state=42),
+        "Random Forest":     RandomForestClassifier(n_estimators=150, max_depth=8, random_state=42, n_jobs=-1),
         "Gradient Boosting": GradientBoostingClassifier(n_estimators=150, max_depth=5, learning_rate=0.1, random_state=42),
     }
-
     results = {}
     for name, model in models.items():
         model.fit(X_train, y_train)
         y_pred = model.predict(X_test)
         y_prob = model.predict_proba(X_test)[:, 1]
         results[name] = {
-            "model": model,
+            "model":    model,
             "accuracy": accuracy_score(y_test, y_pred),
-            "cm": confusion_matrix(y_test, y_pred),
-            "y_test": y_test,
-            "y_pred": y_pred,
-            "y_prob": y_prob,
-            "auc": roc_auc_score(y_test, y_prob),
-            "report": classification_report(y_test, y_pred, output_dict=True),
+            "cm":       confusion_matrix(y_test, y_pred),
+            "y_test":   y_test,
+            "y_pred":   y_pred,
+            "y_prob":   y_prob,
+            "auc":      roc_auc_score(y_test, y_prob),
         }
-
     return results, X_test, y_test
 
 results, X_test, y_test = train_models(df)
-
-# Best model = highest AUC
 best_model_name = max(results, key=lambda k: results[k]["auc"])
-best_model = results[best_model_name]["model"]
-
-# Add predicted class to full dataset
+best_model      = results[best_model_name]["model"]
 df["Predicted_Class"] = best_model.predict(df[MODEL_FEATURES])
-df["Predicted_Prob"] = best_model.predict_proba(df[MODEL_FEATURES])[:, 1]
+df["Predicted_Prob"]  = best_model.predict_proba(df[MODEL_FEATURES])[:, 1]
 
-# ─────────────────────────────────────────────
-# SIDEBAR NAVIGATION
-# ─────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════
+# COLOUR PALETTE
+# ══════════════════════════════════════════════════════════════
+C_GREEN  = "#1e8c6e"
+C_RED    = "#d64045"
+C_BLUE   = "#2d6a9f"
+C_AMBER  = "#f4a940"
+C_PURPLE = "#7b5ea7"
+
+# ══════════════════════════════════════════════════════════════
+# SIDEBAR
+# ══════════════════════════════════════════════════════════════
 with st.sidebar:
-    st.image("https://img.icons8.com/color/96/bank-building.png", width=64)
-    st.title("Universal Bank")
-    st.caption("Personal Loan Campaign Analytics")
-    st.divider()
-    section = st.radio(
-        "📂 Navigate to",
-        [
-            "🏠 Overview",
-            "📊 Descriptive Analysis",
-            "🔍 Diagnostic Analysis",
-            "🤖 Predictive Modeling",
-            "💼 Cross-Selling Opportunities",
-            "👥 Personas & Recommendations",
-        ]
-    )
-    st.divider()
-    st.caption(f"Dataset: {len(df):,} customers")
-    st.caption(f"Best Model: {best_model_name}")
-    st.caption(f"Best AUC: {results[best_model_name]['auc']:.3f}")
+    st.markdown("## 🏦 Universal Bank")
+    st.markdown("**Personal Loan Campaign Intelligence**")
+    st.markdown("---")
+    st.markdown("### Navigate")
+    page = st.radio("", [
+        "🏠  Executive Overview",
+        "👤  Customer Profiles",
+        "🔍  Why Customers Accept Loans",
+        "🤖  Predictive Model Results",
+        "💼  Cross-Selling Opportunities",
+        "🎯  Customer Personas & Actions",
+    ], label_visibility="collapsed")
+    st.markdown("---")
+    st.markdown("**Quick Stats**")
+    st.markdown(f"- Customers analysed: **{len(df):,}**")
+    st.markdown(f"- Loan acceptance rate: **{df[TARGET].mean()*100:.1f}%**")
+    st.markdown(f"- Best model AUC: **{results[best_model_name]['auc']:.3f}**")
+    st.markdown(f"- ML-identified targets: **{df['Predicted_Class'].sum():,}**")
+    st.markdown("---")
+    st.caption("Use the tabs within each section for deeper insights.")
 
-# ─────────────────────────────────────────────────────────────────────────────
-# SECTION 1 — OVERVIEW
-# ─────────────────────────────────────────────────────────────────────────────
-if section == "🏠 Overview":
-    st.markdown('<div class="section-header">🏦 Universal Bank — Personal Loan Campaign Dashboard</div>', unsafe_allow_html=True)
+
+# ══════════════════════════════════════════════════════════════
+# HELPER FUNCTIONS
+# ══════════════════════════════════════════════════════════════
+def banner(title):
+    st.markdown(f'<div class="banner">{title}</div>', unsafe_allow_html=True)
+
+def insight(text, style="blue"):
+    st.markdown(f'<div class="insight-{style}">{text}</div>', unsafe_allow_html=True)
+
+def chart_note(text):
+    st.markdown(f'<div class="chart-note">📖 {text}</div>', unsafe_allow_html=True)
+
+
+# ══════════════════════════════════════════════════════════════
+# PAGE 1 — EXECUTIVE OVERVIEW
+# ══════════════════════════════════════════════════════════════
+if "Overview" in page:
+    banner("🏠 Executive Overview — What Is Happening in the Data?")
+
+    total      = len(df)
+    accepted   = int(df[TARGET].sum())
+    rate       = accepted / total * 100
+    avg_income = df["Income"].mean()
+    avg_cc     = df["CCAvg"].mean()
+    pct_cd     = df["CDAccount"].mean() * 100
+    targets    = int(df["Predicted_Class"].sum())
 
     # KPI Row
-    total = len(df)
-    accepted = df[TARGET].sum()
-    accept_rate = accepted / total * 100
-    avg_income = df["Income"].mean()
-    avg_ccavg = df["CCAvg"].mean()
-    predicted_positives = df["Predicted_Class"].sum()
-
-    c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("👥 Total Customers", f"{total:,}")
-    c2.metric("✅ Loan Accepted", f"{accepted:,}", f"{accept_rate:.1f}%")
-    c3.metric("📈 Conversion Rate", f"{accept_rate:.1f}%", "vs 9% last year")
-    c4.metric("💰 Avg Income ($K)", f"{avg_income:.1f}")
-    c5.metric("🎯 Predicted Targets", f"{predicted_positives:,}", f"{predicted_positives/total*100:.1f}% of base")
+    k1, k2, k3, k4, k5, k6 = st.columns(6)
+    k1.metric("👥 Total Customers",       f"{total:,}")
+    k2.metric("✅ Loan Acceptances",      f"{accepted:,}", f"{rate:.1f}% of base")
+    k3.metric("📈 Acceptance Rate",       f"{rate:.1f}%",  "vs ~9% industry avg")
+    k4.metric("💰 Avg Annual Income",     f"${avg_income:.0f}K")
+    k5.metric("💳 Avg CC Spending",       f"${avg_cc:.1f}K/mo")
+    k6.metric("🎯 ML-Identified Targets", f"{targets:,}", "high-probability leads")
 
     st.divider()
 
-    col1, col2 = st.columns([1, 2])
+    col_a, col_b = st.columns([1, 2])
 
-    with col1:
-        # Donut chart — Loan Acceptance
+    with col_a:
         fig = go.Figure(go.Pie(
-            labels=["Accepted (1)", "Not Accepted (0)"],
+            labels=["Accepted Loan", "Did Not Accept"],
             values=[accepted, total - accepted],
-            hole=0.55,
-            marker_colors=["#2d6a9f", "#e8f4fd"],
+            hole=0.62,
+            marker_colors=[C_GREEN, C_RED],
             textinfo="percent+label",
-            hovertemplate="%{label}: %{value:,} customers<extra></extra>"
+            hovertemplate="%{label}<br>Count: %{value:,}<extra></extra>",
+            pull=[0.04, 0],
         ))
         fig.update_layout(
-            title="Personal Loan Acceptance",
-            showlegend=True,
-            height=320,
-            margin=dict(t=40, b=10, l=10, r=10)
+            title=dict(text="Loan Acceptance Split", font_size=15),
+            showlegend=False, height=310,
+            margin=dict(t=40, b=0, l=0, r=0),
+            annotations=[{
+                "text": f"<b>{rate:.1f}%</b><br>accepted",
+                "x": 0.5, "y": 0.5, "font_size": 16,
+                "showarrow": False, "font_color": C_GREEN
+            }]
         )
         st.plotly_chart(fig, use_container_width=True)
+        chart_note("Only 1 in 10 customers accepted. The ML model finds those 1 in 10 before we call them.")
 
-    with col2:
-        # Dataset sample
-        st.subheader("📋 Dataset Preview")
-        display_cols = ["Age", "Income", "Education_Label", "Family", "CCAvg",
-                        "Mortgage", "PersonalLoan", "SecuritiesAccount", "CDAccount", "Online", "CreditCard"]
-        st.dataframe(df[display_cols].head(10), use_container_width=True, height=300)
+    with col_b:
+        fig = px.histogram(
+            df, x="Income", color="Loan_Label",
+            color_discrete_map={"Accepted": C_GREEN, "Not Accepted": C_RED},
+            nbins=50, barmode="overlay", opacity=0.75,
+            title="Income Distribution by Loan Acceptance",
+            labels={"Income": "Annual Income ($K)", "count": "No. of Customers", "Loan_Label": "Outcome"},
+        )
+        fig.update_layout(height=310, legend=dict(orientation="h", yanchor="bottom", y=1.02))
+        st.plotly_chart(fig, use_container_width=True)
+        chart_note("Green bars (loan acceptors) cluster at higher income brackets — income is the #1 signal.")
+
+    insight(
+        f"🔑 <b>Key Takeaway:</b> Of {total:,} customers, only <b>{accepted:,} ({rate:.1f}%)</b> accepted the "
+        f"personal loan offer. Our machine learning model has identified <b>{targets:,} customers</b> who are "
+        f"highly likely to say yes — enabling a precise, targeted campaign instead of mass outreach.",
+        "green"
+    )
 
     st.divider()
+    st.markdown("#### 📦 Current Product Adoption Across All Customers")
 
-    # Summary statistics
-    st.subheader("📐 Dataset Summary Statistics")
-    summary = df[MODEL_FEATURES + [TARGET]].describe().T.round(2)
-    st.dataframe(summary, use_container_width=True)
+    prods  = ["SecuritiesAccount", "CDAccount", "Online", "CreditCard"]
+    labels = ["Securities Account", "CD Account", "Online Banking", "Credit Card"]
+    colors = [C_BLUE, C_PURPLE, C_GREEN, C_AMBER]
 
-    st.markdown('<div class="insight-box">💡 <b>Key Finding:</b> Universal Bank has a <b>9.6% personal loan acceptance rate</b> among 5,000 customers. The predictive model has identified <b>' + str(predicted_positives) + ' high-potential targets</b>, enabling a far more focused marketing strategy.</div>', unsafe_allow_html=True)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# SECTION 2 — DESCRIPTIVE ANALYSIS
-# ─────────────────────────────────────────────────────────────────────────────
-elif section == "📊 Descriptive Analysis":
-    st.markdown('<div class="section-header">📊 Descriptive Analysis — What Is Happening?</div>', unsafe_allow_html=True)
-
-    # Row 1: Income & Age distribution
-    col1, col2 = st.columns(2)
-    with col1:
-        fig = px.histogram(
-            df, x="Income", nbins=50, color_discrete_sequence=["#2d6a9f"],
-            title="Income Distribution ($K/year)",
-            labels={"Income": "Annual Income ($K)"},
-            marginal="box"
-        )
-        fig.update_layout(height=380)
-        st.plotly_chart(fig, use_container_width=True)
-
-    with col2:
-        fig = px.histogram(
-            df, x="Age", nbins=40, color_discrete_sequence=["#1e8c6e"],
-            title="Age Distribution",
-            labels={"Age": "Age (years)"},
-            marginal="box"
-        )
-        fig.update_layout(height=380)
-        st.plotly_chart(fig, use_container_width=True)
-
-    # Row 2: Education & Family
-    col1, col2 = st.columns(2)
-    with col1:
-        edu_counts = df["Education_Label"].value_counts().reset_index()
-        edu_counts.columns = ["Education", "Count"]
-        fig = px.bar(
-            edu_counts, x="Education", y="Count",
-            color="Education",
-            color_discrete_sequence=["#2d6a9f", "#1e8c6e", "#f4a940"],
-            title="Education Level Distribution",
-            text="Count"
-        )
-        fig.update_traces(textposition="outside")
-        fig.update_layout(height=360, showlegend=False)
-        st.plotly_chart(fig, use_container_width=True)
-
-    with col2:
-        fam_counts = df["Family"].value_counts().reset_index()
-        fam_counts.columns = ["Family Size", "Count"]
-        fam_counts = fam_counts.sort_values("Family Size")
-        fig = px.bar(
-            fam_counts, x="Family Size", y="Count",
-            color="Count",
-            color_continuous_scale="Blues",
-            title="Family Size Distribution",
-            text="Count"
-        )
-        fig.update_traces(textposition="outside")
-        fig.update_layout(height=360, showlegend=False)
-        st.plotly_chart(fig, use_container_width=True)
-
-    # Row 3: CCAvg box plot & Mortgage
-    col1, col2 = st.columns(2)
-    with col1:
-        fig = px.box(
-            df, x="Education_Label", y="CCAvg",
-            color="Education_Label",
-            color_discrete_sequence=["#2d6a9f", "#1e8c6e", "#f4a940"],
-            title="Credit Card Spending (CCAvg) by Education Level",
-            labels={"CCAvg": "Avg Monthly CC Spend ($K)", "Education_Label": "Education"}
-        )
-        fig.update_layout(height=360, showlegend=False)
-        st.plotly_chart(fig, use_container_width=True)
-
-    with col2:
-        fig = px.histogram(
-            df, x="Mortgage", nbins=40,
-            color_discrete_sequence=["#9b59b6"],
-            title="Mortgage Distribution ($K)",
-            labels={"Mortgage": "Mortgage Value ($K)"},
-            marginal="rug"
-        )
-        fig.update_layout(height=360)
-        st.plotly_chart(fig, use_container_width=True)
-
-    # Row 4: Product adoption pie charts
-    st.subheader("📦 Product Adoption Rates")
-    prod_cols = ["SecuritiesAccount", "CDAccount", "Online", "CreditCard"]
-    prod_labels = ["Securities Account", "CD Account", "Online Banking", "Credit Card"]
-
-    cols = st.columns(4)
-    colors = ["#2d6a9f", "#1e8c6e", "#f4a940", "#e84040"]
-    for i, (col, prod, label, color) in enumerate(zip(cols, prod_cols, prod_labels, colors)):
-        with col:
-            val = df[prod].mean() * 100
-            fig = go.Figure(go.Pie(
-                labels=["Has Product", "No Product"],
-                values=[val, 100 - val],
-                hole=0.6,
-                marker_colors=[color, "#f0f0f0"],
-                textinfo="percent",
-                showlegend=False
-            ))
-            fig.update_layout(
-                title=label,
-                height=220,
-                margin=dict(t=40, b=0, l=0, r=0),
-                annotations=[{"text": f"{val:.1f}%", "x": 0.5, "y": 0.5,
-                               "font_size": 14, "showarrow": False}]
-            )
-            st.plotly_chart(fig, use_container_width=True)
-
-    st.markdown('<div class="insight-box">💡 <b>Key Insights:</b> Income ranges widely from $8K–$224K/year. Most customers are <b>undergraduates (40%)</b>. Only <b>29%</b> use online banking, creating cross-sell opportunity. CD Account adoption is low at <b>6%</b> — a prime upsell candidate.</div>', unsafe_allow_html=True)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# SECTION 3 — DIAGNOSTIC ANALYSIS
-# ─────────────────────────────────────────────────────────────────────────────
-elif section == "🔍 Diagnostic Analysis":
-    st.markdown('<div class="section-header">🔍 Diagnostic Analysis — Why Do Customers Accept Loans?</div>', unsafe_allow_html=True)
-
-    # Income vs Loan
-    col1, col2 = st.columns(2)
-    with col1:
-        fig = px.box(
-            df, x="PersonalLoan", y="Income",
-            color="PersonalLoan",
-            color_discrete_map={0: "#b0c4de", 1: "#2d6a9f"},
-            labels={"PersonalLoan": "Loan Accepted", "Income": "Annual Income ($K)"},
-            title="Income vs Personal Loan Acceptance",
-            category_orders={"PersonalLoan": [0, 1]}
-        )
-        fig.update_xaxes(tickvals=[0, 1], ticktext=["Not Accepted", "Accepted"])
-        fig.update_layout(height=380, showlegend=False)
-        st.plotly_chart(fig, use_container_width=True)
-
-    with col2:
-        # Education vs Loan acceptance rate
-        edu_loan = df.groupby("Education_Label")["PersonalLoan"].mean().reset_index()
-        edu_loan["AcceptanceRate"] = edu_loan["PersonalLoan"] * 100
-        fig = px.bar(
-            edu_loan, x="Education_Label", y="AcceptanceRate",
-            color="Education_Label",
-            color_discrete_sequence=["#2d6a9f", "#1e8c6e", "#f4a940"],
-            title="Loan Acceptance Rate by Education Level",
-            labels={"AcceptanceRate": "Acceptance Rate (%)", "Education_Label": "Education"},
-            text="AcceptanceRate"
-        )
-        fig.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
-        fig.update_layout(height=380, showlegend=False)
-        st.plotly_chart(fig, use_container_width=True)
-
-    # CCAvg vs Loan & Family vs Loan
-    col1, col2 = st.columns(2)
-    with col1:
-        fig = px.box(
-            df, x="PersonalLoan", y="CCAvg",
-            color="PersonalLoan",
-            color_discrete_map={0: "#b0c4de", 1: "#1e8c6e"},
-            labels={"PersonalLoan": "Loan Accepted", "CCAvg": "Avg Monthly CC Spend ($K)"},
-            title="Credit Card Spending vs Loan Acceptance"
-        )
-        fig.update_xaxes(tickvals=[0, 1], ticktext=["Not Accepted", "Accepted"])
-        fig.update_layout(height=360, showlegend=False)
-        st.plotly_chart(fig, use_container_width=True)
-
-    with col2:
-        fam_loan = df.groupby("Family")["PersonalLoan"].mean().reset_index()
-        fam_loan["AcceptanceRate"] = fam_loan["PersonalLoan"] * 100
-        fig = px.bar(
-            fam_loan, x="Family", y="AcceptanceRate",
-            color="AcceptanceRate",
-            color_continuous_scale="Blues",
-            title="Loan Acceptance Rate by Family Size",
-            labels={"AcceptanceRate": "Acceptance Rate (%)", "Family": "Family Size"},
-            text="AcceptanceRate"
-        )
-        fig.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
-        fig.update_layout(height=360)
-        st.plotly_chart(fig, use_container_width=True)
-
-    # Mortgage vs Loan
-    col1, col2 = st.columns(2)
-    with col1:
-        fig = px.box(
-            df, x="PersonalLoan", y="Mortgage",
-            color="PersonalLoan",
-            color_discrete_map={0: "#b0c4de", 1: "#9b59b6"},
-            labels={"PersonalLoan": "Loan Accepted", "Mortgage": "Mortgage ($K)"},
-            title="Mortgage Value vs Loan Acceptance"
-        )
-        fig.update_xaxes(tickvals=[0, 1], ticktext=["Not Accepted", "Accepted"])
-        fig.update_layout(height=360, showlegend=False)
-        st.plotly_chart(fig, use_container_width=True)
-
-    with col2:
-        # Income bins vs loan acceptance rate
-        df["IncomeBin"] = pd.cut(df["Income"], bins=[0, 50, 100, 150, 200, 250], labels=["<50K", "50–100K", "100–150K", "150–200K", "200K+"])
-        income_loan = df.groupby("IncomeBin", observed=True)["PersonalLoan"].mean().reset_index()
-        income_loan["AcceptanceRate"] = income_loan["PersonalLoan"] * 100
-        fig = px.bar(
-            income_loan, x="IncomeBin", y="AcceptanceRate",
-            color="AcceptanceRate",
-            color_continuous_scale="Teal",
-            title="Loan Acceptance Rate by Income Bracket",
-            labels={"AcceptanceRate": "Acceptance Rate (%)", "IncomeBin": "Income Bracket"},
-            text="AcceptanceRate"
-        )
-        fig.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
-        fig.update_layout(height=360)
-        st.plotly_chart(fig, use_container_width=True)
-
-    # Correlation Heatmap
-    st.subheader("🔗 Correlation Heatmap")
-    corr_df = df[MODEL_FEATURES + [TARGET]].corr()
-    fig, ax = plt.subplots(figsize=(12, 7))
-    mask = np.triu(np.ones_like(corr_df, dtype=bool))
-    sns.heatmap(
-        corr_df, mask=mask, annot=True, fmt=".2f",
-        cmap="RdYlBu_r", center=0, ax=ax,
-        linewidths=0.5, cbar_kws={"shrink": 0.8}
-    )
-    ax.set_title("Feature Correlation Matrix", fontsize=14, fontweight="bold", pad=16)
-    plt.tight_layout()
-    st.pyplot(fig)
-    plt.close()
-
-    st.markdown("""
-    <div class="insight-box">💡 <b>Key Drivers of Loan Acceptance:</b>
-    <ul>
-        <li><b>Income</b> is the strongest predictor — high-income customers (100K+) accept at 3–4× the base rate.</li>
-        <li><b>CD Account holders</b> show the highest correlation with loan acceptance.</li>
-        <li><b>Advanced/Professional education</b> doubles acceptance probability vs undergrads.</li>
-        <li><b>Higher CC Spend (CCAvg)</b> signals financial activity and willingness to borrow.</li>
-        <li><b>Family size of 3–4</b> correlates with higher acceptance — likely higher financial needs.</li>
-    </ul>
-    </div>
-    """, unsafe_allow_html=True)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# SECTION 4 — PREDICTIVE MODELING
-# ─────────────────────────────────────────────────────────────────────────────
-elif section == "🤖 Predictive Modeling":
-    st.markdown('<div class="section-header">🤖 Predictive Modeling — Who Will Accept a Loan?</div>', unsafe_allow_html=True)
-
-    # Model Accuracy Comparison
-    st.subheader("📊 Model Performance Comparison")
-    perf_data = {
-        "Model": list(results.keys()),
-        "Accuracy": [r["accuracy"] * 100 for r in results.values()],
-        "AUC-ROC": [r["auc"] for r in results.values()],
-    }
-    perf_df = pd.DataFrame(perf_data)
-
-    col1, col2 = st.columns(2)
-    with col1:
-        fig = px.bar(
-            perf_df, x="Model", y="Accuracy",
-            color="Model",
-            color_discrete_sequence=["#2d6a9f", "#1e8c6e", "#f4a940"],
-            title="Model Accuracy (%)",
-            text="Accuracy"
-        )
-        fig.update_traces(texttemplate="%{text:.2f}%", textposition="outside")
-        fig.update_layout(height=360, showlegend=False, yaxis_range=[90, 100])
-        st.plotly_chart(fig, use_container_width=True)
-
-    with col2:
-        fig = px.bar(
-            perf_df, x="Model", y="AUC-ROC",
-            color="Model",
-            color_discrete_sequence=["#2d6a9f", "#1e8c6e", "#f4a940"],
-            title="AUC-ROC Score",
-            text="AUC-ROC"
-        )
-        fig.update_traces(texttemplate="%{text:.3f}", textposition="outside")
-        fig.update_layout(height=360, showlegend=False, yaxis_range=[0.9, 1.0])
-        st.plotly_chart(fig, use_container_width=True)
-
-    # ROC Curves
-    st.subheader("📈 ROC Curves")
-    fig = go.Figure()
-    colors_roc = ["#2d6a9f", "#1e8c6e", "#f4a940"]
-    for i, (name, res) in enumerate(results.items()):
-        fpr, tpr, _ = roc_curve(res["y_test"], res["y_prob"])
-        fig.add_trace(go.Scatter(
-            x=fpr, y=tpr,
-            mode="lines", name=f"{name} (AUC={res['auc']:.3f})",
-            line=dict(color=colors_roc[i], width=2.5)
+    pcols = st.columns(4)
+    for col, prod, lbl, clr in zip(pcols, prods, labels, colors):
+        val = df[prod].mean() * 100
+        fig = go.Figure(go.Pie(
+            labels=["Has it", "Doesn't have it"],
+            values=[val, 100 - val],
+            hole=0.65,
+            marker_colors=[clr, "#ececec"],
+            textinfo="none", showlegend=False,
         ))
-    fig.add_trace(go.Scatter(x=[0, 1], y=[0, 1], mode="lines",
-                             line=dict(dash="dash", color="gray"), name="Random"))
-    fig.update_layout(
-        title="ROC Curves — All Models",
-        xaxis_title="False Positive Rate",
-        yaxis_title="True Positive Rate",
-        height=420
-    )
-    st.plotly_chart(fig, use_container_width=True)
+        fig.update_layout(
+            title=dict(text=lbl, font_size=13), height=200,
+            margin=dict(t=36, b=0, l=0, r=0),
+            annotations=[{"text": f"<b>{val:.0f}%</b>", "x": 0.5, "y": 0.5,
+                           "font_size": 17, "showarrow": False, "font_color": clr}]
+        )
+        col.plotly_chart(fig, use_container_width=True)
 
-    # Confusion Matrices
-    st.subheader("🔢 Confusion Matrices")
-    cm_cols = st.columns(3)
-    for i, (name, res) in enumerate(results.items()):
-        with cm_cols[i]:
-            cm = res["cm"]
-            fig = px.imshow(
-                cm,
-                text_auto=True,
-                color_continuous_scale="Blues",
-                labels=dict(x="Predicted", y="Actual", color="Count"),
-                x=["Predicted 0", "Predicted 1"],
-                y=["Actual 0", "Actual 1"],
-                title=f"{name}"
-            )
-            fig.update_layout(height=300, margin=dict(t=40, b=10, l=10, r=10))
+    insight(
+        "💡 <b>Cross-Sell Gap:</b> Only <b>6% of customers have a CD Account</b> and "
+        "only <b>29% use Online Banking</b>. These are significant untapped opportunities — "
+        "especially among the customers predicted to take a loan.",
+        "orange"
+    )
+
+
+# ══════════════════════════════════════════════════════════════
+# PAGE 2 — CUSTOMER PROFILES (DESCRIPTIVE)
+# ══════════════════════════════════════════════════════════════
+elif "Profiles" in page:
+    banner("👤 Customer Profiles — Who Are Our Customers?")
+
+    tab1, tab2, tab3, tab4 = st.tabs(["💰 Income", "🎂 Age", "🎓 Education", "👨‍👩‍👧 Family Size"])
+
+    with tab1:
+        col1, col2 = st.columns(2)
+        with col1:
+            fig = px.histogram(df, x="Income", nbins=50,
+                               color_discrete_sequence=[C_BLUE],
+                               title="Annual Income Distribution",
+                               labels={"Income": "Annual Income ($K)", "count": "No. of Customers"},
+                               marginal="box")
+            fig.update_layout(height=370)
             st.plotly_chart(fig, use_container_width=True)
 
-    # Feature Importance (best model)
-    st.subheader(f"🏆 Feature Importance — {best_model_name} (Best Model)")
-    fi = pd.DataFrame({
-        "Feature": MODEL_FEATURES,
-        "Importance": best_model.feature_importances_
-    }).sort_values("Importance", ascending=True)
+        with col2:
+            df["IncomeBracket"] = pd.cut(df["Income"], bins=[0,50,100,150,200,300],
+                                          labels=["<$50K","$50–100K","$100–150K","$150–200K","$200K+"])
+            ib = df["IncomeBracket"].value_counts().sort_index().reset_index()
+            ib.columns = ["Income Bracket","Customers"]
+            fig = px.bar(ib, x="Income Bracket", y="Customers",
+                         color_discrete_sequence=[C_BLUE],
+                         title="Customers by Income Bracket", text="Customers")
+            fig.update_traces(textposition="outside")
+            fig.update_layout(height=370)
+            st.plotly_chart(fig, use_container_width=True)
+
+        chart_note(
+            f"Most customers earn between $20K–$120K per year. The average income is "
+            f"${df['Income'].mean():.0f}K. A smaller high-income group (above $100K) drives "
+            "the majority of personal loan acceptances."
+        )
+        with st.expander("See income summary statistics"):
+            st.dataframe(df["Income"].describe().round(2).to_frame("Income ($K)"), use_container_width=True)
+
+    with tab2:
+        col1, col2 = st.columns(2)
+        with col1:
+            fig = px.histogram(df, x="Age", nbins=40,
+                               color_discrete_sequence=[C_PURPLE],
+                               title="Customer Age Distribution",
+                               labels={"Age": "Age (years)", "count": "No. of Customers"},
+                               marginal="box")
+            fig.update_layout(height=370)
+            st.plotly_chart(fig, use_container_width=True)
+
+        with col2:
+            df["AgeBand"] = pd.cut(df["Age"], bins=[20,30,40,50,60,70,100],
+                                    labels=["20s","30s","40s","50s","60s","70+"])
+            ab = df["AgeBand"].value_counts().sort_index().reset_index()
+            ab.columns = ["Age Band","Customers"]
+            fig = px.bar(ab, x="Age Band", y="Customers",
+                         color_discrete_sequence=[C_PURPLE],
+                         title="Customers by Age Group", text="Customers")
+            fig.update_traces(textposition="outside")
+            fig.update_layout(height=370)
+            st.plotly_chart(fig, use_container_width=True)
+
+        chart_note(
+            f"Customers range from mid-20s to late 60s. The 30s and 40s age groups are the largest "
+            f"segments. Average age is {df['Age'].mean():.0f} years."
+        )
+
+    with tab3:
+        col1, col2 = st.columns(2)
+        with col1:
+            edu_counts = df["Education_Label"].value_counts().reset_index()
+            edu_counts.columns = ["Education","Customers"]
+            fig = px.pie(edu_counts, values="Customers", names="Education",
+                         color_discrete_sequence=[C_BLUE, C_GREEN, C_AMBER],
+                         title="Education Level Breakdown", hole=0.4)
+            fig.update_layout(height=370)
+            st.plotly_chart(fig, use_container_width=True)
+
+        with col2:
+            edu_loan = df.groupby("Education_Label")["PersonalLoan"].mean().reset_index()
+            edu_loan["Acceptance Rate (%)"] = edu_loan["PersonalLoan"] * 100
+            fig = px.bar(edu_loan, x="Education_Label", y="Acceptance Rate (%)",
+                         color="Education_Label",
+                         color_discrete_sequence=[C_BLUE, C_GREEN, C_AMBER],
+                         title="Loan Acceptance Rate by Education",
+                         text="Acceptance Rate (%)",
+                         labels={"Education_Label": "Education"})
+            fig.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
+            fig.update_layout(height=370, showlegend=False)
+            st.plotly_chart(fig, use_container_width=True)
+
+        chart_note(
+            "Advanced/Professional degree holders accept loans at the highest rate. "
+            "Graduate and Advanced customers are the strongest target audience for loan campaigns."
+        )
+
+    with tab4:
+        col1, col2 = st.columns(2)
+        with col1:
+            fam = df["Family"].value_counts().sort_index().reset_index()
+            fam.columns = ["Family Size","Customers"]
+            fig = px.bar(fam, x="Family Size", y="Customers",
+                         color_discrete_sequence=[C_AMBER],
+                         title="Customers by Family Size", text="Customers")
+            fig.update_traces(textposition="outside")
+            fig.update_layout(height=370)
+            st.plotly_chart(fig, use_container_width=True)
+
+        with col2:
+            fam_loan = df.groupby("Family")["PersonalLoan"].mean().reset_index()
+            fam_loan["Acceptance Rate (%)"] = fam_loan["PersonalLoan"] * 100
+            fig = px.bar(fam_loan, x="Family", y="Acceptance Rate (%)",
+                         color="Acceptance Rate (%)",
+                         color_continuous_scale="YlGn",
+                         title="Loan Acceptance Rate by Family Size",
+                         text="Acceptance Rate (%)",
+                         labels={"Family": "Family Size"})
+            fig.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
+            fig.update_layout(height=370, showlegend=False)
+            st.plotly_chart(fig, use_container_width=True)
+
+        chart_note(
+            "Families of 3 or more show higher loan acceptance rates — larger families tend to have "
+            "greater financial needs (education, home upgrades) which drives personal loan demand."
+        )
+
+
+# ══════════════════════════════════════════════════════════════
+# PAGE 3 — DIAGNOSTIC ANALYSIS
+# ══════════════════════════════════════════════════════════════
+elif "Why Customers" in page:
+    banner("🔍 Why Do Customers Accept Personal Loans?")
+
+    st.markdown(
+        "Each chart below isolates one factor and shows how strongly it relates to loan acceptance. "
+        "**Green = accepted loan. Red = did not accept.**"
+    )
+    st.divider()
+
+    col1, col2 = st.columns(2)
+    with col1:
+        fig = px.box(df, x="Loan_Label", y="Income",
+                     color="Loan_Label",
+                     color_discrete_map={"Accepted": C_GREEN, "Not Accepted": C_RED},
+                     title="Income vs Loan Acceptance",
+                     labels={"Loan_Label": "", "Income": "Annual Income ($K)"})
+        fig.update_layout(height=360, showlegend=False)
+        st.plotly_chart(fig, use_container_width=True)
+        chart_note("Loan acceptors have a noticeably higher median income. Customers earning over $100K are 3–4× more likely to accept.")
+
+    with col2:
+        df["IncomeBracket"] = pd.cut(df["Income"], bins=[0,50,100,150,200,300],
+                                      labels=["<$50K","$50–100K","$100–150K","$150–200K","$200K+"])
+        ib_loan = df.groupby("IncomeBracket", observed=True)["PersonalLoan"].mean().reset_index()
+        ib_loan["Rate"] = ib_loan["PersonalLoan"] * 100
+        fig = px.bar(ib_loan, x="IncomeBracket", y="Rate",
+                     color="Rate",
+                     color_continuous_scale=["#ffcccc","#ffe0b2","#c8e6c9","#388e3c"],
+                     title="Loan Acceptance Rate by Income Bracket",
+                     text="Rate",
+                     labels={"IncomeBracket": "Income Bracket", "Rate": "Acceptance Rate (%)"})
+        fig.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
+        fig.update_layout(height=360, showlegend=False)
+        st.plotly_chart(fig, use_container_width=True)
+        chart_note("Acceptance rate jumps dramatically above $100K — confirming income is the #1 driver.")
+
+    insight(
+        "💰 <b>Income Insight:</b> Customers earning more than <b>$100K/year</b> show an acceptance rate "
+        "of over 30%, compared to just 3–5% for those earning under $50K. "
+        "Income is the single strongest predictor of loan acceptance.", "green"
+    )
+    st.divider()
+
+    col1, col2 = st.columns(2)
+    with col1:
+        fig = px.box(df, x="Loan_Label", y="CCAvg",
+                     color="Loan_Label",
+                     color_discrete_map={"Accepted": C_GREEN, "Not Accepted": C_RED},
+                     title="Credit Card Spending vs Loan Acceptance",
+                     labels={"Loan_Label": "", "CCAvg": "Avg Monthly CC Spend ($K)"})
+        fig.update_layout(height=360, showlegend=False)
+        st.plotly_chart(fig, use_container_width=True)
+        chart_note("Loan acceptors spend 2–3× more on credit cards monthly — high spenders are more credit-active.")
+
+    with col2:
+        fig = px.box(df, x="Loan_Label", y="Mortgage",
+                     color="Loan_Label",
+                     color_discrete_map={"Accepted": C_GREEN, "Not Accepted": C_RED},
+                     title="Mortgage Value vs Loan Acceptance",
+                     labels={"Loan_Label": "", "Mortgage": "Mortgage Value ($K)"})
+        fig.update_layout(height=360, showlegend=False)
+        st.plotly_chart(fig, use_container_width=True)
+        chart_note("Customers with higher mortgages also accept loans more — they are experienced, comfortable borrowers.")
+
+    insight(
+        "💳 <b>Spending Behaviour Insight:</b> Customers who accepted loans spend on average "
+        "<b>2–3× more on their credit cards</b> monthly. High CC usage signals financial activity "
+        "and a higher appetite for credit products.", "blue"
+    )
+    st.divider()
+
+    st.markdown("#### 🔗 How Strongly Does Each Factor Relate to Loan Acceptance?")
+    corr_cols = ["Income","CCAvg","Mortgage","Age","Family","Education",
+                 "CDAccount","SecuritiesAccount","Online","CreditCard","PersonalLoan"]
+    corr = df[corr_cols].corr()[["PersonalLoan"]].drop("PersonalLoan").sort_values("PersonalLoan")
 
     fig = px.bar(
-        fi, x="Importance", y="Feature",
-        orientation="h",
-        color="Importance",
-        color_continuous_scale="Blues",
-        title=f"Feature Importance — {best_model_name}",
-        text="Importance"
+        corr.reset_index(), x="PersonalLoan", y="index", orientation="h",
+        color="PersonalLoan",
+        color_continuous_scale=["#d64045","#f4f4f4","#1e8c6e"],
+        color_continuous_midpoint=0,
+        title="What Drives Loan Acceptance? (Correlation Analysis)",
+        labels={"PersonalLoan": "Correlation with Loan Acceptance", "index": ""},
+        text="PersonalLoan",
     )
-    fig.update_traces(texttemplate="%{text:.3f}", textposition="outside")
-    fig.update_layout(height=430, showlegend=False)
+    fig.update_traces(texttemplate="%{text:.2f}", textposition="outside")
+    fig.update_layout(height=440, showlegend=False, coloraxis_showscale=False)
     st.plotly_chart(fig, use_container_width=True)
+    chart_note(
+        "Bars pointing RIGHT (green) mean the factor increases loan acceptance likelihood. "
+        "Bars pointing LEFT (red) have no significant positive effect. "
+        "Income, CD Account ownership, and CCAvg are the top three drivers."
+    )
 
-    # Classification report
-    st.subheader("📋 Detailed Classification Report")
-    best_report = results[best_model_name]["report"]
-    report_df = pd.DataFrame(best_report).T.drop(index=["accuracy", "macro avg", "weighted avg"], errors="ignore")
-    report_df = report_df[["precision", "recall", "f1-score", "support"]].round(3)
-    report_df.index = ["Not Accepted (0)", "Accepted (1)"]
-    st.dataframe(report_df, use_container_width=True)
+    with st.expander("See full correlation heatmap between all variables"):
+        fig2, ax = plt.subplots(figsize=(11, 6))
+        sns.heatmap(df[corr_cols].corr(), annot=True, fmt=".2f",
+                    cmap="RdYlGn", center=0, ax=ax,
+                    linewidths=0.4, cbar_kws={"shrink": 0.8})
+        ax.set_title("Full Feature Correlation Matrix", fontsize=13, fontweight="bold", pad=12)
+        plt.tight_layout()
+        st.pyplot(fig2)
+        plt.close()
 
-    st.markdown(f'<div class="insight-box">🏆 <b>Best Model: {best_model_name}</b> — AUC: {results[best_model_name]["auc"]:.3f}, Accuracy: {results[best_model_name]["accuracy"]*100:.2f}%.<br>Income, CCAvg, and CD Account ownership are the top predictors of personal loan acceptance.</div>', unsafe_allow_html=True)
+
+# ══════════════════════════════════════════════════════════════
+# PAGE 4 — PREDICTIVE MODELING
+# ══════════════════════════════════════════════════════════════
+elif "Predictive" in page:
+    banner("🤖 Predictive Model Results — Which Customers Will Accept a Loan?")
+
+    st.markdown(
+        "Three machine learning models were trained on historical data to predict which customers "
+        "are most likely to accept a personal loan. Results are shown below."
+    )
+
+    tab1, tab2, tab3 = st.tabs(["📊 Model Comparison", "🧮 Confusion Matrices", "🏆 Top Predictors"])
+
+    with tab1:
+        perf = pd.DataFrame({
+            "Model": list(results.keys()),
+            "Accuracy (%)": [r["accuracy"] * 100 for r in results.values()],
+            "AUC-ROC Score": [r["auc"] for r in results.values()],
+        })
+
+        col1, col2 = st.columns(2)
+        with col1:
+            fig = px.bar(perf, x="Model", y="Accuracy (%)",
+                         color="Model",
+                         color_discrete_sequence=[C_BLUE, C_GREEN, C_AMBER],
+                         title="Model Accuracy (%)", text="Accuracy (%)")
+            fig.update_traces(texttemplate="%{text:.2f}%", textposition="outside")
+            fig.update_layout(height=360, showlegend=False, yaxis_range=[90, 101])
+            st.plotly_chart(fig, use_container_width=True)
+
+        with col2:
+            fig = px.bar(perf, x="Model", y="AUC-ROC Score",
+                         color="Model",
+                         color_discrete_sequence=[C_BLUE, C_GREEN, C_AMBER],
+                         title="AUC-ROC Score (1.0 = perfect)", text="AUC-ROC Score")
+            fig.update_traces(texttemplate="%{text:.3f}", textposition="outside")
+            fig.update_layout(height=360, showlegend=False, yaxis_range=[0.95, 1.01])
+            st.plotly_chart(fig, use_container_width=True)
+
+        chart_note(
+            "Accuracy = how often the model is correct overall. "
+            "AUC-ROC = how well it separates loan acceptors from non-acceptors (1.0 = perfect, 0.5 = coin flip)."
+        )
+
+        st.markdown("#### 📈 ROC Curves — How Well Can Each Model Spot Loan Acceptors?")
+        fig = go.Figure()
+        roc_colors = [C_BLUE, C_GREEN, C_AMBER]
+        for i, (name, res) in enumerate(results.items()):
+            fpr, tpr, _ = roc_curve(res["y_test"], res["y_prob"])
+            fig.add_trace(go.Scatter(x=fpr, y=tpr, mode="lines",
+                                     name=f"{name}  (AUC={res['auc']:.3f})",
+                                     line=dict(color=roc_colors[i], width=2.5)))
+        fig.add_trace(go.Scatter(x=[0,1], y=[0,1], mode="lines",
+                                  line=dict(dash="dash", color="gray", width=1.5),
+                                  name="Random Guess (AUC=0.5)"))
+        fig.update_layout(
+            xaxis_title="False Positive Rate (wasted calls)",
+            yaxis_title="True Positive Rate (correctly found)",
+            height=420,
+            legend=dict(orientation="h", yanchor="bottom", y=1.02),
+            plot_bgcolor="#fafafa"
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        chart_note(
+            "The further a curve bows toward the top-left corner, the better the model at identifying "
+            "real loan acceptors while avoiding wasted calls. All three models are excellent."
+        )
+
+        insight(
+            f"🏆 <b>Best Model: {best_model_name}</b> — AUC: "
+            f"<b>{results[best_model_name]['auc']:.3f}</b>, Accuracy: "
+            f"<b>{results[best_model_name]['accuracy']*100:.2f}%</b>. "
+            f"This model powers all customer predictions in this dashboard.", "green"
+        )
+
+    with tab2:
+        st.markdown(
+            "A **Confusion Matrix** shows how many predictions were correct. "
+            "**True Positives (bottom-right)** = loan acceptors we correctly identified. "
+            "**False Negatives (bottom-left)** = missed opportunities."
+        )
+        cm_cols = st.columns(3)
+        for i, (name, res) in enumerate(results.items()):
+            with cm_cols[i]:
+                cm = res["cm"]
+                total_test = cm.sum()
+                correct    = cm[0,0] + cm[1,1]
+                fig = px.imshow(
+                    cm, text_auto=True,
+                    color_continuous_scale=["#fde8e8","#c8e6c9"],
+                    labels=dict(x="Predicted", y="Actual"),
+                    x=["Predicted: No Loan","Predicted: Loan"],
+                    y=["Actual: No Loan","Actual: Loan"],
+                    title=f"{name}<br><sup>{correct:,}/{total_test:,} correct</sup>"
+                )
+                fig.update_coloraxes(showscale=False)
+                fig.update_layout(height=300, margin=dict(t=60, b=10, l=10, r=10))
+                st.plotly_chart(fig, use_container_width=True)
+
+        with st.expander("How to read a confusion matrix"):
+            st.markdown("""
+            | Cell | Meaning |
+            |---|---|
+            | **Top-left** | Correctly identified non-acceptors ✅ |
+            | **Top-right** | Falsely flagged — we called them, they said No ❌ |
+            | **Bottom-left** | Missed opportunity — they would have said Yes! ⚠️ |
+            | **Bottom-right** | Correctly identified loan acceptors 🎉 |
+            """)
+
+    with tab3:
+        fi = pd.DataFrame({
+            "Factor": MODEL_FEATURES,
+            "Importance": best_model.feature_importances_
+        }).sort_values("Importance", ascending=True)
+
+        fi["Colour"] = fi["Importance"].apply(
+            lambda x: C_GREEN if x >= fi["Importance"].quantile(0.7) else
+                      C_AMBER if x >= fi["Importance"].quantile(0.4) else "#cccccc"
+        )
+
+        fig = px.bar(fi, x="Importance", y="Factor", orientation="h",
+                     color="Colour", color_discrete_map="identity",
+                     title=f"What Factors Drive Loan Acceptance? — {best_model_name}",
+                     text="Importance",
+                     labels={"Factor": "", "Importance": "Importance Score"})
+        fig.update_traces(texttemplate="%{text:.3f}", textposition="outside")
+        fig.update_layout(height=450, showlegend=False, plot_bgcolor="#fafafa")
+        st.plotly_chart(fig, use_container_width=True)
+        chart_note(
+            "Longer green bars = stronger predictors. "
+            "Income and CCAvg (credit card spending) are the most powerful signals the model uses "
+            "to identify likely loan acceptors."
+        )
+
+        insight(
+            "🔑 <b>Top 5 Predictors of Loan Acceptance:</b><br>"
+            "1️⃣ <b>Income</b> — by far the strongest signal<br>"
+            "2️⃣ <b>CCAvg</b> — high spenders are more credit-active<br>"
+            "3️⃣ <b>CD Account</b> — existing investors trust the bank<br>"
+            "4️⃣ <b>Education</b> — advanced degree holders accept more<br>"
+            "5️⃣ <b>Family Size</b> — larger families have greater financial needs", "blue"
+        )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# SECTION 5 — CROSS-SELLING OPPORTUNITIES
-# ─────────────────────────────────────────────────────────────────────────────
-elif section == "💼 Cross-Selling Opportunities":
-    st.markdown('<div class="section-header">💼 Cross-Selling Opportunities — Maximize Revenue Per Customer</div>', unsafe_allow_html=True)
+# ══════════════════════════════════════════════════════════════
+# PAGE 5 — CROSS-SELLING
+# ══════════════════════════════════════════════════════════════
+elif "Cross-Selling" in page:
+    banner("💼 Cross-Selling Opportunities — Maximize Revenue Per Customer")
 
-    predicted_yes = df[df["Predicted_Class"] == 1]
-    total_yes = len(predicted_yes)
+    predicted_yes = df[df["Predicted_Class"] == 1].copy()
+    total_yes     = len(predicted_yes)
 
-    st.metric("🎯 Customers Predicted to Accept Loan", f"{total_yes:,}",
-              f"{total_yes/len(df)*100:.1f}% of total base")
+    st.markdown(
+        f"The model identified **{total_yes:,} customers** as highly likely to accept a personal loan. "
+        "This section shows what **other products** these customers don't yet have — your best cross-sell opportunities."
+    )
+
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("🎯 Predicted Loan Acceptors",    f"{total_yes:,}")
+    k2.metric("📊 % of Total Customer Base",     f"{total_yes/len(df)*100:.1f}%")
+    k3.metric("💰 Avg Income (Target Group)",    f"${predicted_yes['Income'].mean():.0f}K",
+              f"+${predicted_yes['Income'].mean()-df['Income'].mean():.0f}K vs all customers")
+    k4.metric("💳 Avg CC Spend (Target Group)", f"${predicted_yes['CCAvg'].mean():.1f}K/mo",
+              f"+${predicted_yes['CCAvg'].mean()-df['CCAvg'].mean():.1f}K vs all customers")
 
     st.divider()
 
-    # Cross-sell product adoption within predicted acceptors
-    st.subheader("📦 Product Adoption Among Predicted Loan Acceptors")
-    product_labels = {
-        "SecuritiesAccount": "Securities Account",
-        "CDAccount": "CD Account",
-        "Online": "Online Banking",
-        "CreditCard": "Credit Card"
-    }
+    prods  = ["SecuritiesAccount", "CDAccount", "Online", "CreditCard"]
+    labels = ["Securities Account", "CD Account", "Online Banking", "Credit Card"]
+    colors = [C_BLUE, C_PURPLE, C_GREEN, C_AMBER]
 
     prod_data = []
-    for col, label in product_labels.items():
-        has = predicted_yes[col].sum()
+    for p, l in zip(prods, labels):
+        has     = int(predicted_yes[p].sum())
         has_not = total_yes - has
-        prod_data.append({
-            "Product": label,
-            "Has Product": has,
-            "Does NOT Have": has_not,
-            "Cross-Sell %": has_not / total_yes * 100
-        })
-
-    prod_df = pd.DataFrame(prod_data).sort_values("Cross-Sell %", ascending=False)
+        prod_data.append({"Product": l, "Already Has": has,
+                          "Cross-Sell Target": has_not,
+                          "Opportunity %": has_not / total_yes * 100})
+    prod_df = pd.DataFrame(prod_data).sort_values("Opportunity %", ascending=False)
 
     col1, col2 = st.columns(2)
     with col1:
-        fig = px.bar(
-            prod_df, x="Product", y="Cross-Sell %",
-            color="Product",
-            color_discrete_sequence=["#2d6a9f", "#1e8c6e", "#f4a940", "#e84040"],
-            title="Cross-Sell Opportunity (% Without Product)",
-            text="Cross-Sell %"
-        )
+        fig = px.bar(prod_df, x="Product", y="Opportunity %",
+                     color="Product",
+                     color_discrete_sequence=colors,
+                     title="Cross-Sell Opportunity — % of Predicted Acceptors Without Each Product",
+                     text="Opportunity %")
         fig.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
-        fig.update_layout(height=380, showlegend=False)
+        fig.update_layout(height=390, showlegend=False)
         st.plotly_chart(fig, use_container_width=True)
 
     with col2:
-        fig = go.Figure(go.Bar(
-            x=prod_df["Product"],
-            y=prod_df["Has Product"],
-            name="Already Has",
-            marker_color="#2d6a9f"
-        ))
-        fig.add_trace(go.Bar(
-            x=prod_df["Product"],
-            y=prod_df["Does NOT Have"],
-            name="Cross-Sell Target",
-            marker_color="#f4a940"
-        ))
+        fig = go.Figure()
+        fig.add_trace(go.Bar(name="Already Has Product",
+                             x=prod_df["Product"], y=prod_df["Already Has"],
+                             marker_color=C_GREEN, text=prod_df["Already Has"],
+                             textposition="inside"))
+        fig.add_trace(go.Bar(name="Cross-Sell Target (Does NOT Have)",
+                             x=prod_df["Product"], y=prod_df["Cross-Sell Target"],
+                             marker_color=C_AMBER, text=prod_df["Cross-Sell Target"],
+                             textposition="inside"))
         fig.update_layout(
             barmode="stack",
-            title="Predicted Loan Acceptors — Product Ownership",
-            height=380,
+            title="Product Ownership Among Predicted Loan Acceptors",
+            height=390,
             legend=dict(orientation="h", yanchor="bottom", y=1.02)
         )
         st.plotly_chart(fig, use_container_width=True)
 
-    # Cross-sell table
-    st.subheader("📋 Cross-Sell Target Summary")
-    st.dataframe(prod_df[["Product", "Has Product", "Does NOT Have", "Cross-Sell %"]].round(1),
-                 use_container_width=True)
-
-    # Combination analysis — customers with NO cross-sell products
-    st.subheader("🔗 Multi-Product Cross-Sell Potential")
-    predicted_yes_copy = predicted_yes.copy()
-    predicted_yes_copy["ProductCount"] = (
-        predicted_yes_copy[["SecuritiesAccount", "CDAccount", "Online", "CreditCard"]].sum(axis=1)
+    chart_note(
+        "Orange = customers who don't have this product yet — they are your cross-sell targets. "
+        "Green = already own it. The bigger the orange bar, the bigger the opportunity."
     )
-    pc_dist = predicted_yes_copy["ProductCount"].value_counts().sort_index().reset_index()
-    pc_dist.columns = ["Products Held", "Customer Count"]
 
-    fig = px.bar(
-        pc_dist, x="Products Held", y="Customer Count",
-        color="Customer Count",
-        color_continuous_scale="Blues",
-        title="Number of Cross-Sell Products Already Held (Predicted Loan Acceptors)",
-        text="Customer Count"
+    top_prod = prod_df.iloc[0]
+    insight(
+        f"🎯 <b>Biggest Opportunity: {top_prod['Product']}</b> — "
+        f"<b>{int(top_prod['Cross-Sell Target']):,} customers</b> ({top_prod['Opportunity %']:.1f}%) "
+        f"in our predicted loan acceptor group don't have it yet. "
+        f"Bundling this with the loan offer is the single highest-priority revenue action.", "green"
     )
+
+    st.divider()
+    st.markdown("#### 🔗 How Many Cross-Sell Products Do Predicted Loan Acceptors Already Hold?")
+
+    predicted_yes["ProductCount"] = predicted_yes[prods].sum(axis=1)
+    pc = predicted_yes["ProductCount"].value_counts().sort_index().reset_index()
+    pc.columns = ["Products Held", "Customers"]
+    pc["Label"] = pc["Products Held"].map({
+        0: "0 products — No cross-sell products yet",
+        1: "1 product — Some adoption",
+        2: "2 products — Moderate adoption",
+        3: "3 products — High adoption",
+        4: "4 products — Full adoption"
+    })
+
+    fig = px.bar(pc, x="Label", y="Customers",
+                 color="Customers", color_continuous_scale="YlGn",
+                 title="How Many Other Products Do Predicted Loan Acceptors Hold?",
+                 text="Customers")
     fig.update_traces(textposition="outside")
-    fig.update_layout(height=360, showlegend=False)
+    fig.update_layout(height=380, showlegend=False, xaxis_title="")
     st.plotly_chart(fig, use_container_width=True)
 
-    no_products = (predicted_yes_copy["ProductCount"] == 0).sum()
-    st.markdown(f"""
-    <div class="insight-box">
-    💡 <b>Cross-Sell Insights for Predicted Loan Acceptors ({total_yes:,} customers):</b>
-    <ul>
-        <li><b>Online Banking</b>: {prod_df[prod_df['Product']=='Online Banking']['Does NOT Have'].values[0]:,.0f} customers don't have it — highest cross-sell priority.</li>
-        <li><b>Credit Card</b>: {prod_df[prod_df['Product']=='Credit Card']['Does NOT Have'].values[0]:,.0f} customers are eligible targets.</li>
-        <li><b>Securities Account</b>: {prod_df[prod_df['Product']=='Securities Account']['Does NOT Have'].values[0]:,.0f} customers — ideal for wealth management upsell.</li>
-        <li><b>CD Account</b>: {prod_df[prod_df['Product']=='CD Account']['Does NOT Have'].values[0]:,.0f} customers can be offered fixed deposit products.</li>
-        <li><b>{no_products:,} customers</b> hold zero cross-sell products — the highest-value targets for bundled offers.</li>
-    </ul>
-    </div>
-    """, unsafe_allow_html=True)
+    zero_products = int((predicted_yes["ProductCount"] == 0).sum())
+    chart_note(
+        f"{zero_products:,} predicted loan acceptors currently hold ZERO other products. "
+        "These are your highest-value bundle targets."
+    )
+
+    insight(
+        f"💡 <b>Bundle Strategy:</b> Focus first on the <b>{zero_products:,} customers with no other products</b>. "
+        "A bundled offer — Personal Loan + Online Banking + Credit Card at a preferential rate — "
+        "will both close the loan and deepen the banking relationship in one conversation.", "orange"
+    )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# SECTION 6 — PERSONAS & RECOMMENDATIONS
-# ─────────────────────────────────────────────────────────────────────────────
-elif section == "👥 Personas & Recommendations":
-    st.markdown('<div class="section-header">👥 Customer Personas & Marketing Recommendations</div>', unsafe_allow_html=True)
+# ══════════════════════════════════════════════════════════════
+# PAGE 6 — PERSONAS & RECOMMENDATIONS
+# ══════════════════════════════════════════════════════════════
+elif "Personas" in page:
+    banner("🎯 Customer Personas & Marketing Recommendations")
 
-    # Build personas from data
-    predicted_yes = df[df["Predicted_Class"] == 1]
+    st.markdown(
+        "Based on the data analysis, we have identified **3 high-value customer personas**. "
+        "Each has a distinct profile, loan acceptance likelihood, and clear marketing approach."
+    )
+    st.divider()
 
-    # Persona 1: High Income Professionals
     p1 = df[(df["Income"] >= 100) & (df["Education"] >= 2)]
-    p1_accept = p1["PersonalLoan"].mean() * 100
-
-    # Persona 2: Young Digital Banking Users
     p2 = df[(df["Age"] < 40) & (df["Online"] == 1)]
-    p2_accept = p2["PersonalLoan"].mean() * 100
-
-    # Persona 3: Family-Oriented Borrowers
     p3 = df[(df["Family"] >= 3) & (df["Mortgage"] > 0)]
-    p3_accept = p3["PersonalLoan"].mean() * 100
+    base = df["PersonalLoan"].mean() * 100
+    p1_rate = p1["PersonalLoan"].mean() * 100
+    p2_rate = p2["PersonalLoan"].mean() * 100
+    p3_rate = p3["PersonalLoan"].mean() * 100
 
-    # Persona 4: CD + Securities Account Holders
-    p4 = df[(df["CDAccount"] == 1) | (df["SecuritiesAccount"] == 1)]
-    p4_accept = p4["PersonalLoan"].mean() * 100
+    c1, c2, c3 = st.columns(3)
 
-    st.subheader("🎭 Customer Personas")
-
-    # Persona cards
-    col1, col2 = st.columns(2)
-
-    with col1:
+    with c1:
         st.markdown(f"""
-        <div class="persona-card" style="border-top-color: #2d6a9f;">
-        <h3 style="color:#2d6a9f;">👔 Persona 1: High-Income Professionals</h3>
-        <p><b>Profile:</b> Income ≥ $100K/year, Graduate or Advanced education</p>
-        <p><b>Size:</b> {len(p1):,} customers</p>
-        <p><b>Loan Acceptance Rate:</b> <span style="color:#2d6a9f; font-size:1.4rem; font-weight:bold;">{p1_accept:.1f}%</span></p>
-        <p><b>Avg Income:</b> ${p1['Income'].mean():.0f}K &nbsp;|&nbsp; <b>Avg CCAvg:</b> ${p1['CCAvg'].mean():.1f}K/mo</p>
-        <p><b>🎯 Strategy:</b> Premium personal loan packages with competitive rates. Pair with Securities Account and Wealth Management.</p>
+        <div class="persona" style="border-top-color:{C_BLUE};">
+            <h4 style="color:{C_BLUE};">👔 Persona 1 — High-Income Professional</h4>
+            <div class="big-rate" style="color:{C_GREEN};">{p1_rate:.1f}%</div>
+            <div style="color:#888; font-size:0.82rem; margin-bottom:14px;">loan acceptance rate</div>
+            <b>Profile:</b>
+            <ul style="padding-left:18px; font-size:0.9rem; margin-top:6px;">
+                <li>Annual income ≥ $100K</li>
+                <li>Graduate or Advanced degree</li>
+                <li>{len(p1):,} customers in this group</li>
+                <li>Avg income: ${p1['Income'].mean():.0f}K/year</li>
+                <li>Avg CC spend: ${p1['CCAvg'].mean():.1f}K/month</li>
+            </ul>
+            <b>Best Products to Offer:</b>
+            <ul style="padding-left:18px; font-size:0.9rem; margin-top:6px;">
+                <li>Premium Personal Loan</li>
+                <li>Securities Account</li>
+                <li>Rewards Credit Card</li>
+            </ul>
+            <b>Best Channel:</b> Relationship Manager, Direct Mail
         </div>
         """, unsafe_allow_html=True)
 
-    with col2:
+    with c2:
         st.markdown(f"""
-        <div class="persona-card" style="border-top-color: #1e8c6e;">
-        <h3 style="color:#1e8c6e;">📱 Persona 2: Young Digital Banking Users</h3>
-        <p><b>Profile:</b> Age &lt; 40, Active Online Banking users</p>
-        <p><b>Size:</b> {len(p2):,} customers</p>
-        <p><b>Loan Acceptance Rate:</b> <span style="color:#1e8c6e; font-size:1.4rem; font-weight:bold;">{p2_accept:.1f}%</span></p>
-        <p><b>Avg Age:</b> {p2['Age'].mean():.0f} yrs &nbsp;|&nbsp; <b>Avg Income:</b> ${p2['Income'].mean():.0f}K</p>
-        <p><b>🎯 Strategy:</b> Digital-first loan applications with fast approvals. Push notifications & in-app offers. Cross-sell Credit Card and CD Account.</p>
+        <div class="persona" style="border-top-color:{C_GREEN};">
+            <h4 style="color:{C_GREEN};">📱 Persona 2 — Young Digital User</h4>
+            <div class="big-rate" style="color:{C_GREEN};">{p2_rate:.1f}%</div>
+            <div style="color:#888; font-size:0.82rem; margin-bottom:14px;">loan acceptance rate</div>
+            <b>Profile:</b>
+            <ul style="padding-left:18px; font-size:0.9rem; margin-top:6px;">
+                <li>Age under 40</li>
+                <li>Already using Online Banking</li>
+                <li>{len(p2):,} customers in this group</li>
+                <li>Avg age: {p2['Age'].mean():.0f} years</li>
+                <li>Avg income: ${p2['Income'].mean():.0f}K/year</li>
+            </ul>
+            <b>Best Products to Offer:</b>
+            <ul style="padding-left:18px; font-size:0.9rem; margin-top:6px;">
+                <li>Fast-approval Personal Loan (app-based)</li>
+                <li>Cashback Credit Card</li>
+                <li>CD Account (short-term savings)</li>
+            </ul>
+            <b>Best Channel:</b> Mobile App Push, In-App Banner, Email
         </div>
         """, unsafe_allow_html=True)
 
-    col3, col4 = st.columns(2)
-
-    with col3:
+    with c3:
         st.markdown(f"""
-        <div class="persona-card" style="border-top-color: #f4a940;">
-        <h3 style="color:#f4a940;">👨‍👩‍👧‍👦 Persona 3: Family-Oriented Borrowers</h3>
-        <p><b>Profile:</b> Family size ≥ 3, Has an existing mortgage</p>
-        <p><b>Size:</b> {len(p3):,} customers</p>
-        <p><b>Loan Acceptance Rate:</b> <span style="color:#f4a940; font-size:1.4rem; font-weight:bold;">{p3_accept:.1f}%</span></p>
-        <p><b>Avg Family:</b> {p3['Family'].mean():.1f} &nbsp;|&nbsp; <b>Avg Mortgage:</b> ${p3['Mortgage'].mean():.0f}K</p>
-        <p><b>🎯 Strategy:</b> Family financial planning bundles. Loan consolidation offers. Cross-sell Online Banking and Credit Card for daily needs.</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with col4:
-        st.markdown(f"""
-        <div class="persona-card" style="border-top-color: #9b59b6;">
-        <h3 style="color:#9b59b6;">💼 Persona 4: Existing Investors</h3>
-        <p><b>Profile:</b> Holds Securities or CD Account</p>
-        <p><b>Size:</b> {len(p4):,} customers</p>
-        <p><b>Loan Acceptance Rate:</b> <span style="color:#9b59b6; font-size:1.4rem; font-weight:bold;">{p4_accept:.1f}%</span></p>
-        <p><b>Avg Income:</b> ${p4['Income'].mean():.0f}K &nbsp;|&nbsp; <b>Avg CCAvg:</b> ${p4['CCAvg'].mean():.1f}K/mo</p>
-        <p><b>🎯 Strategy:</b> Relationship banking offers. Use existing trust to offer personal loans as liquidity tools. Premium rates for loyal customers.</p>
+        <div class="persona" style="border-top-color:{C_AMBER};">
+            <h4 style="color:{C_AMBER};">👨‍👩‍👧 Persona 3 — Family-Oriented Borrower</h4>
+            <div class="big-rate" style="color:{C_GREEN};">{p3_rate:.1f}%</div>
+            <div style="color:#888; font-size:0.82rem; margin-bottom:14px;">loan acceptance rate</div>
+            <b>Profile:</b>
+            <ul style="padding-left:18px; font-size:0.9rem; margin-top:6px;">
+                <li>Family size of 3 or more</li>
+                <li>Has an existing mortgage</li>
+                <li>{len(p3):,} customers in this group</li>
+                <li>Avg family size: {p3['Family'].mean():.1f} members</li>
+                <li>Avg mortgage: ${p3['Mortgage'].mean():.0f}K</li>
+            </ul>
+            <b>Best Products to Offer:</b>
+            <ul style="padding-left:18px; font-size:0.9rem; margin-top:6px;">
+                <li>Personal Loan (education/home)</li>
+                <li>Online Banking</li>
+                <li>Family Credit Card</li>
+            </ul>
+            <b>Best Channel:</b> Email, Phone, Branch Visit
         </div>
         """, unsafe_allow_html=True)
 
     st.divider()
+    st.markdown("#### 📊 How Each Persona Compares to the Overall Customer Average")
 
-    # Persona acceptance comparison chart
-    st.subheader("📊 Persona Acceptance Rate Comparison")
-    persona_compare = pd.DataFrame({
-        "Persona": ["High-Income Professionals", "Young Digital Users",
-                    "Family-Oriented Borrowers", "Existing Investors"],
-        "Acceptance Rate (%)": [p1_accept, p2_accept, p3_accept, p4_accept],
-        "Segment Size": [len(p1), len(p2), len(p3), len(p4)],
-        "Color": ["#2d6a9f", "#1e8c6e", "#f4a940", "#9b59b6"]
-    }).sort_values("Acceptance Rate (%)", ascending=False)
+    compare_df = pd.DataFrame({
+        "Persona": ["High-Income Professional", "Young Digital User",
+                    "Family-Oriented Borrower", "Overall Average"],
+        "Acceptance Rate (%)": [p1_rate, p2_rate, p3_rate, base],
+        "Color": [C_BLUE, C_GREEN, C_AMBER, "#aaaaaa"]
+    }).sort_values("Acceptance Rate (%)", ascending=True)
 
     fig = px.bar(
-        persona_compare, x="Persona", y="Acceptance Rate (%)",
+        compare_df, x="Acceptance Rate (%)", y="Persona", orientation="h",
         color="Persona",
-        color_discrete_sequence=persona_compare["Color"].tolist(),
-        title="Loan Acceptance Rate by Customer Persona",
-        text="Acceptance Rate (%)"
+        color_discrete_map={row["Persona"]: row["Color"] for _, row in compare_df.iterrows()},
+        text="Acceptance Rate (%)",
+        title="Loan Acceptance Rate: Personas vs Overall Average",
+        labels={"Persona": ""}
     )
     fig.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
-    fig.add_hline(y=df["PersonalLoan"].mean() * 100, line_dash="dash",
-                  line_color="red", annotation_text=f"Overall avg: {df['PersonalLoan'].mean()*100:.1f}%")
-    fig.update_layout(height=400, showlegend=False)
+    fig.add_vline(x=base, line_dash="dash", line_color="gray",
+                  annotation_text=f"Overall avg: {base:.1f}%",
+                  annotation_position="top right")
+    fig.update_layout(height=340, showlegend=False, plot_bgcolor="#fafafa")
     st.plotly_chart(fig, use_container_width=True)
+    chart_note("All three personas significantly outperform the overall average — confirming these are the right segments to focus on.")
 
-    # Marketing Recommendations
     st.divider()
-    st.subheader("📣 Marketing Recommendations for Universal Bank")
+    st.markdown("#### 📣 Prioritised Marketing Action Plan")
 
-    rec_data = {
-        "Priority": ["🔴 High", "🔴 High", "🟡 Medium", "🟡 Medium", "🟢 Long-term"],
-        "Recommendation": [
-            "Target High-Income Professionals (Income ≥ $100K) with premium personal loan packages",
-            "Leverage CD Account holders — they have the highest loan conversion rate",
-            "Launch digital campaigns for Online Banking users aged 20–40",
-            "Family bundle campaigns for households with 3+ members and existing mortgages",
-            "Use ML model to score entire customer base monthly and prioritize top-500 leads"
-        ],
-        "Expected Impact": ["Very High", "Very High", "High", "Medium", "Sustained Growth"],
-        "Channel": ["Relationship Manager / Direct Mail", "In-Branch + Email", "Mobile App / Push Notification", "Email + Phone", "CRM Automation"]
-    }
-    rec_df = pd.DataFrame(rec_data)
-    st.dataframe(rec_df, use_container_width=True, height=230)
-
-    # Final summary
-    st.markdown(f"""
-    <div class="insight-box" style="font-size:1rem;">
-    🏦 <b>Executive Summary for Universal Bank Marketing Team:</b><br><br>
-    The predictive model identifies <b>{df['Predicted_Class'].sum():,} customers</b>
-    ({df['Predicted_Class'].mean()*100:.1f}% of the base) as high-probability personal loan acceptors.
-    This is <b>significantly higher than the 9.6% historical acceptance rate</b>, enabling targeted campaigns
-    instead of broad outreach.<br><br>
-    <b>Top priorities:</b>
-    High-income customers earning above $100K, CD Account holders, graduate/advanced degree holders, and
-    families with 3+ members. Pairing loan offers with cross-sell products (especially Online Banking
-    and Credit Cards) will maximize revenue per customer and deepen banking relationships.
-    </div>
+    st.markdown("""
+    <table class="rec-table">
+    <tr>
+        <th>Priority</th>
+        <th>Action</th>
+        <th>Who to Target</th>
+        <th>Products to Bundle</th>
+        <th>Channel</th>
+        <th>Expected Impact</th>
+    </tr>
+    <tr>
+        <td><span class="pill-high">🔴 Highest</span></td>
+        <td>Premium loan campaign for high-income professionals</td>
+        <td>Income ≥ $100K, Graduate/Advanced degree</td>
+        <td>Loan + Securities Account</td>
+        <td>Relationship Manager</td>
+        <td>Very High ROI</td>
+    </tr>
+    <tr>
+        <td><span class="pill-high">🔴 Highest</span></td>
+        <td>Target CD Account holders with a loan offer</td>
+        <td>Existing CD Account customers</td>
+        <td>Loan + Credit Card</td>
+        <td>In-Branch + Email</td>
+        <td>Highest conversion rate in data</td>
+    </tr>
+    <tr>
+        <td><span class="pill-medium">🟡 Medium</span></td>
+        <td>Digital loan push for young online banking users</td>
+        <td>Age &lt; 40, using Online Banking</td>
+        <td>Loan + CD Account</td>
+        <td>Mobile App / Push Notification</td>
+        <td>High volume, low cost</td>
+    </tr>
+    <tr>
+        <td><span class="pill-medium">🟡 Medium</span></td>
+        <td>Family financial bundle campaign</td>
+        <td>Family size ≥ 3, has mortgage</td>
+        <td>Loan + Online Banking</td>
+        <td>Email + Phone</td>
+        <td>Medium-high conversion</td>
+    </tr>
+    <tr>
+        <td><span class="pill-low">🟢 Ongoing</span></td>
+        <td>Monthly ML model scoring — refresh target list</td>
+        <td>Top 500 predicted leads each month</td>
+        <td>Personalised bundle</td>
+        <td>CRM Automation</td>
+        <td>Sustained growth</td>
+    </tr>
+    </table>
     """, unsafe_allow_html=True)
+
+    st.divider()
+
+    targets = int(df["Predicted_Class"].sum())
+    insight(
+        f"🏦 <b>Executive Conclusion:</b><br><br>"
+        f"Universal Bank's previous campaign achieved a <b>9.6% conversion rate</b> by contacting customers broadly. "
+        f"With this ML-powered approach, the bank can now focus on a precise list of "
+        f"<b>{targets:,} high-probability customers</b>.<br><br>"
+        f"Focusing on <b>High-Income Professionals</b>, <b>CD Account holders</b>, and "
+        f"<b>families with mortgages</b> will dramatically improve campaign efficiency — "
+        f"spending less marketing budget while achieving higher conversions and greater "
+        f"revenue per customer through smart cross-selling.", "green"
+    )
